@@ -1,21 +1,28 @@
-import { Routes, Route } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Navigation } from './components/Navigation';
+import { Dashboard } from './pages/Dashboard';
+import { Schedule } from './pages/Schedule';
+import { Settings } from './pages/Settings';
+import { Customers } from './pages/Customers';
+import './App.css';
 
-export default function App() {
+function App() {
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Salon Admin Dashboard</h1>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
-    </div>
+    <Router>
+      <div style={{ display: 'flex', height: '100vh' }}>
+        <Navigation />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/schedule" element={<Schedule />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/customers" element={<Customers />} />
+          </Routes>
+        </div>
+      </div>
+    </Router>
   );
 }
 
-function Dashboard() {
-  return (
-    <div>
-      <h2>Dashboard</h2>
-      <p>Salon management features coming soon...</p>
-    </div>
-  );
-}
+export default App;
