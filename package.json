@@ -1,0 +1,22 @@
+{
+  "name": "a10-hairsalon-v2",
+  "version": "1.0.0",
+  "description": "A10 Hairsalon - Simplified Monorepo with LiME-based Design",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/salon",
+    "apps/stylist",
+    "apps/customer"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

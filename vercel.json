@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "apps/salon/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/salon/(.*)",
+      "dest": "apps/salon/dist/$1"
+    },
+    {
+      "src": "/stylist/(.*)",
+      "dest": "apps/stylist/dist/$1"
+    },
+    {
+      "src": "/customer/(.*)",
+      "dest": "apps/customer/dist/$1"
+    }
+  ]
+}
