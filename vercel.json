@@ -5,6 +5,16 @@
       "src": "apps/salon/package.json",
       "use": "@vercel/static-build",
       "config": { "distDir": "dist" }
+    },
+    {
+      "src": "apps/stylist/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    },
+    {
+      "src": "apps/customer/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
     }
   ],
   "routes": [
@@ -19,6 +29,10 @@
     {
       "src": "/customer/(.*)",
       "dest": "apps/customer/dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "apps/salon/dist/$1"
     }
   ]
 }
