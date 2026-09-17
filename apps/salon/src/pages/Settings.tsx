@@ -1,30 +1,71 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Header } from '../components/Header';
+import { SalonInfo } from '../components/settings/SalonInfo';
+import { StylistManagement } from '../components/settings/StylistManagement';
+import { MenuManagement } from '../components/settings/MenuManagement';
+import { WorkingHoursManagement } from '../components/settings/WorkingHoursManagement';
+import { OffDaysManagement } from '../components/settings/OffDaysManagement';
+
+type Tab = 'salon' | 'stylists' | 'menus' | 'hours' | 'offdays';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'salon', label: 'サロン基本設定', icon: '🏢' },
+  { id: 'stylists', label: 'スタイリスト管理', icon: '👩‍💼' },
+  { id: 'menus', label: 'メニュー管理', icon: '✂️' },
+  { id: 'hours', label: '営業時間設定', icon: '⏰' },
+  { id: 'offdays', label: '休み管理', icon: '📅' },
+];
 
 export const Settings: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<Tab>('salon');
+
   return (
     <>
       <Header title="設定" />
-      <div style={{ padding: '20px' }}>
+      <div style={{ display: 'flex', height: 'calc(100vh - 120px)' }}>
+        {/* Sidebar */}
         <div style={{
-          background: '#fff',
-          padding: '20px',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          width: '200px',
+          background: '#f5f5f5',
+          borderRight: '1px solid #e0e0e0',
+          overflowY: 'auto'
         }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginTop: 0 }}>スタイリスト管理</h2>
-          <p style={{ color: '#999' }}>スタイリストの追加・編集機能は準備中です</p>
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                width: '100%',
+                padding: '16px 12px',
+                border: 'none',
+                background: activeTab === tab.id ? '#fff' : 'transparent',
+                borderLeft: activeTab === tab.id ? '4px solid #ff6b9d' : 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: '14px',
+                fontWeight: activeTab === tab.id ? 'bold' : 'normal',
+                color: activeTab === tab.id ? '#ff6b9d' : '#666',
+                transition: 'all 0.2s'
+              }}
+            >
+              <span style={{ marginRight: '8px' }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
-        
+
+        {/* Content */}
         <div style={{
-          background: '#fff',
+          flex: 1,
+          overflowY: 'auto',
           padding: '20px',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          marginTop: '15px'
+          background: '#fff'
         }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginTop: 0 }}>営業時間設定</h2>
-          <p style={{ color: '#999' }}>営業時間の設定機能は準備中です</p>
+          {activeTab === 'salon' && <SalonInfo />}
+          {activeTab === 'stylists' && <StylistManagement />}
+          {activeTab === 'menus' && <MenuManagement />}
+          {activeTab === 'hours' && <WorkingHoursManagement />}
+          {activeTab === 'offdays' && <OffDaysManagement />}
         </div>
       </div>
     </>
