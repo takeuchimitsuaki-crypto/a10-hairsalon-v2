@@ -1,69 +1,125 @@
+import { WorkerEnv, Stylist, Menu, Appointment, Chart, Message } from './types';
+
 export default {
-  async fetch(request: Request, env: any) {
+  async fetch(request: Request, env: WorkerEnv) {
     const url = new URL(request.url);
-    
-    if (url.pathname === '/api/health') {
-      return new Response(JSON.stringify({
-        status: 'ok',
-        timestamp: new Date().toISOString()
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const db = env.DB;
+
+    // CORS headers
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
     }
 
-    if (url.pathname === '/api/stylists') {
-      return new Response(JSON.stringify({
-        results: [],
-        success: true,
-        message: 'Stylists endpoint working - DB initialization needed'
+    try {
+      // Health check
+      if (url.pathname === '/api/health') {
+        return new Response(JSON.stringify({
+          status: 'ok',
+          timestamp: new Date().toISOString(),
+          database: 'connected'
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Get all stylists
+      if (url.pathname === '/api/stylists' && request.method === 'GET') {
+        const { results } = await db.prepare(
+          'SELECT * FROM stylists ORDER BY created_at DESC'
+        ).all() as any;
+        
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Get all appointments
+      if (url.pathname === '/api/appointments' && request.method === 'GET') {
+        const { results } = await db.prepare(
+          'SELECT * FROM appointments ORDER BY start_time DESC'
+        ).all() as any;
+        
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Get all menus
+      if (url.pathname === '/api/menus' && request.method === 'GET') {
+        const { results } = await db.prepare(
+          'SELECT * FROM menus WHERE is_active = 1 ORDER BY display_order'
+        ).all() as any;
+        
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Get all messages
+      if (url.pathname === '/api/messages' && request.method === 'GET') {
+        const { results } = await db.prepare(
+          'SELECT * FROM messages ORDER BY created_at DESC'
+        ).all() as any;
+        
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Get all charts
+      if (url.pathname === '/api/charts' && request.method === 'GET') {
+        const { results } = await db.prepare(
+          'SELECT * FROM charts ORDER BY created_at DESC'
+        ).all() as any;
+        
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Not found
+      return new Response(JSON.stringify({ 
+        error: 'Not Found',
+        path: url.pathname 
       }), {
-        headers: { 'Content-Type': 'application/json' }
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    } catch (error: any) {
+      console.error('API Error:', error);
+      return new Response(JSON.stringify({
+        error: 'Internal Server Error',
+        message: error.message
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
-
-    if (url.pathname === '/api/appointments') {
-      return new Response(JSON.stringify({
-        results: [],
-        success: true,
-        message: 'Appointments endpoint working'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (url.pathname === '/api/menus') {
-      return new Response(JSON.stringify({
-        results: [],
-        success: true,
-        message: 'Menus endpoint working'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (url.pathname === '/api/messages') {
-      return new Response(JSON.stringify({
-        results: [],
-        success: true,
-        message: 'Messages endpoint working'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (url.pathname === '/api/charts') {
-      return new Response(JSON.stringify({
-        results: [],
-        success: true,
-        message: 'Charts endpoint working'
-      }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    return new Response(JSON.stringify({ error: 'Not Found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
   }
-} as ExportedHandler;
+} as ExportedHandler<WorkerEnv>;

@@ -6,11 +6,12 @@ compatibility_flags = []
 [[d1_databases]]
 binding = "DB"
 database_name = "a10-hairsalon"
-database_id = "TODO_SET_IN_ENV"
+database_id = "local"
 
 [env.production]
 name = "a10-hairsalon-api-prod"
-route = "api.a10-hairsalon.workers.dev"
 
-[env.development]
-name = "a10-hairsalon-api-dev"
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "a10-hairsalon-prod"
+database_id = "TODO_SET_IN_ENV"
