@@ -485,6 +485,230 @@ export default {
         }
       }
 
+
+      // ================= MENU SETS =================
+      // Get all menu sets
+      if (url.pathname === '/api/menu-sets' && request.method === 'GET') {
+        const salonId = new URL(request.url).searchParams.get('salon_id') || 'salon_001';
+        const { results } = await db.prepare(
+          'SELECT * FROM menu_sets WHERE salon_id = ? AND is_active = 1 ORDER BY display_order'
+        ).bind(salonId).all() as any;
+
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Create menu set
+      if (url.pathname === '/api/menu-sets' && request.method === 'POST') {
+        const body = await request.json() as any;
+        const { salon_id, name, total_price, total_duration_minutes, color_code, description, menu_ids } = body;
+
+        if (!name || !total_price || total_duration_minutes === undefined) {
+          return new Response(JSON.stringify({
+            error: 'Missing required fields: name, total_price, total_duration_minutes'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const id = `menu_set_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const { success } = await db.prepare(
+          `INSERT INTO menu_sets (id, salon_id, name, total_price, total_duration_minutes, color_code, description, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        ).bind(id, salon_id, name, total_price, total_duration_minutes, color_code || '#ff6b9d', description || '').run() as any;
+
+        if (!success) throw new Error('Failed to create menu set');
+
+        if (menu_ids && Array.isArray(menu_ids)) {
+          for (let i = 0; i < menu_ids.length; i++) {
+            const item_id = `menu_set_item_${Date.now()}_${i}`;
+            await db.prepare(
+              `INSERT INTO menu_set_items (id, menu_set_id, menu_id, display_order, created_at)
+               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
+            ).bind(item_id, id, menu_ids[i], i).run();
+          }
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          id,
+          message: 'Menu set created'
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Update menu set
+      if (url.pathname.match(/^\/api\/menu-sets\/[^/]+$/) && request.method === 'PUT') {
+        const id = url.pathname.split('/').pop();
+        const body = await request.json() as any;
+        const { name, total_price, total_duration_minutes, color_code, description, menu_ids } = body;
+
+        const updates = [];
+        const bindings = [];
+        if (name !== undefined) { updates.push('name = ?'); bindings.push(name); }
+        if (total_price !== undefined) { updates.push('total_price = ?'); bindings.push(total_price); }
+        if (total_duration_minutes !== undefined) { updates.push('total_duration_minutes = ?'); bindings.push(total_duration_minutes); }
+        if (color_code !== undefined) { updates.push('color_code = ?'); bindings.push(color_code); }
+        if (description !== undefined) { updates.push('description = ?'); bindings.push(description); }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        bindings.push(id);
+
+        const { success } = await db.prepare(
+          `UPDATE menu_sets SET ${updates.join(', ')} WHERE id = ?`
+        ).bind(...bindings).run() as any;
+
+        if (success && menu_ids && Array.isArray(menu_ids)) {
+          await db.prepare('DELETE FROM menu_set_items WHERE menu_set_id = ?').bind(id).run();
+          for (let i = 0; i < menu_ids.length; i++) {
+            const item_id = `menu_set_item_${Date.now()}_${i}`;
+            await db.prepare(
+              `INSERT INTO menu_set_items (id, menu_set_id, menu_id, display_order, created_at)
+               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
+            ).bind(item_id, id, menu_ids[i], i).run();
+          }
+        }
+
+        if (success) {
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Menu set updated'
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+      }
+
+      // Delete menu set
+      if (url.pathname.match(/^\/api\/menu-sets\/[^/]+$/) && request.method === 'DELETE') {
+        const id = url.pathname.split('/').pop();
+
+        const { success } = await db.prepare(
+          'UPDATE menu_sets SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(id).run() as any;
+
+        if (success) {
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Menu set deleted'
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+      }
+
+      // ================= PRIVATE TIME =================
+      // Get private time blocks
+      if (url.pathname === '/api/private-time' && request.method === 'GET') {
+        const stylistId = new URL(request.url).searchParams.get('stylist_id');
+
+        let query = 'SELECT * FROM private_time WHERE is_active = 1';
+        let params: any[] = [];
+
+        if (stylistId) {
+          query += ' AND stylist_id = ?';
+          params.push(stylistId);
+        }
+
+        query += ' ORDER BY start_time';
+
+        const { results } = await db.prepare(query).bind(...params).all() as any;
+
+        return new Response(JSON.stringify({
+          results: results || [],
+          success: true,
+          count: results?.length || 0
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Create private time block
+      if (url.pathname === '/api/private-time' && request.method === 'POST') {
+        const body = await request.json() as any;
+        const { stylist_id, start_time, end_time, reason } = body;
+
+        if (!stylist_id || !start_time || !end_time) {
+          return new Response(JSON.stringify({
+            error: 'Missing required fields: stylist_id, start_time, end_time'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        const id = `private_time_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const { success } = await db.prepare(
+          `INSERT INTO private_time (id, stylist_id, start_time, end_time, reason, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        ).bind(id, stylist_id, start_time, end_time, reason || '').run() as any;
+
+        if (!success) throw new Error('Failed to create private time block');
+
+        return new Response(JSON.stringify({
+          success: true,
+          id,
+          message: 'Private time block created'
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
+      // Update private time block
+      if (url.pathname.match(/^\/api\/private-time\/[^/]+$/) && request.method === 'PUT') {
+        const id = url.pathname.split('/').pop();
+        const body = await request.json() as any;
+        const { start_time, end_time, reason } = body;
+
+        const updates = [];
+        const bindings = [];
+        if (start_time !== undefined) { updates.push('start_time = ?'); bindings.push(start_time); }
+        if (end_time !== undefined) { updates.push('end_time = ?'); bindings.push(end_time); }
+        if (reason !== undefined) { updates.push('reason = ?'); bindings.push(reason); }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        bindings.push(id);
+
+        const { success } = await db.prepare(
+          `UPDATE private_time SET ${updates.join(', ')} WHERE id = ?`
+        ).bind(...bindings).run() as any;
+
+        if (success) {
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Private time block updated'
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+      }
+
+      // Delete private time block
+      if (url.pathname.match(/^\/api\/private-time\/[^/]+$/) && request.method === 'DELETE') {
+        const id = url.pathname.split('/').pop();
+
+        const { success } = await db.prepare(
+          'UPDATE private_time SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(id).run() as any;
+
+        if (success) {
+          return new Response(JSON.stringify({
+            success: true,
+            message: 'Private time block deleted'
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+      }
       // Not found
       return new Response(JSON.stringify({ 
         error: 'Not Found',
