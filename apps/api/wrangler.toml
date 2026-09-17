@@ -6,7 +6,7 @@ compatibility_flags = []
 [[d1_databases]]
 binding = "DB"
 database_name = "a10-hairsalon"
-database_id = "local"
+database_id = "local-dev-db"
 
 [env.production]
 name = "a10-hairsalon-api-prod"
@@ -14,4 +14,4 @@ name = "a10-hairsalon-api-prod"
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "a10-hairsalon-prod"
-database_id = "TODO_SET_IN_ENV"
+database_id = "4ee369b0-85de-46ac-8173-06a5f0e9ecfe"
