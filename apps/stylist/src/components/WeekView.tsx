@@ -1,17 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { WeekDay, Appointment } from '../types';
 
 interface Props {
   weekDays: WeekDay[];
   appointments: Appointment[];
   businessHours?: { start: number; end: number };
+  onUpdateAppointment?: (id: string, updates: Partial<Appointment>) => Promise<boolean>;
 }
 
-export const WeekView: React.FC<Props> = ({ 
-  weekDays, 
+export const WeekView: React.FC<Props> = ({
+  weekDays,
   appointments,
-  businessHours = { start: 9, end: 21 }
+  businessHours = { start: 9, end: 21 },
+  onUpdateAppointment
 }) => {
+  const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null);
   const hours = Array.from({ length: businessHours.end - businessHours.start }, (_, i) => businessHours.start + i);
 
   const getAppointmentsForDay = (date: Date) => {
@@ -19,6 +22,32 @@ export const WeekView: React.FC<Props> = ({
       const aptDate = new Date(apt.start_time);
       return aptDate.toDateString() === date.toDateString();
     });
+  };
+
+  const handleDragStart = (e: React.DragEvent, apt: Appointment) => {
+    setDraggedAppointment(apt);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, date: Date, hour: number) => {
+    e.preventDefault();
+    if (!draggedAppointment || !onUpdateAppointment) return;
+
+    const newStartTime = new Date(date);
+    newStartTime.setHours(hour, 0, 0, 0);
+
+    const success = await onUpdateAppointment(draggedAppointment.id, {
+      start_time: newStartTime.toISOString()
+    });
+
+    if (success) {
+      setDraggedAppointment(null);
+    }
   };
 
   return (
@@ -76,6 +105,8 @@ export const WeekView: React.FC<Props> = ({
               return (
                 <div
                   key={`${day.date.toISOString()}-${hour}`}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, day.date, hour)}
                   style={{
                     height: '60px',
                     borderBottom: '1px solid #f0f0f0',
@@ -88,14 +119,18 @@ export const WeekView: React.FC<Props> = ({
                     .map(apt => (
                       <div
                         key={apt.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, apt)}
                         style={{
-                          background: '#1976d2',
+                          background: draggedAppointment?.id === apt.id ? '#1565c0' : '#1976d2',
                           color: '#fff',
                           fontSize: '10px',
                           padding: '3px',
                           borderRadius: '3px',
                           marginBottom: '2px',
-                          cursor: 'grab'
+                          cursor: 'grab',
+                          opacity: draggedAppointment?.id === apt.id ? 0.6 : 1,
+                          userSelect: 'none'
                         }}
                       >
                         <div style={{ fontWeight: 'bold' }}>{apt.customer_name}</div>

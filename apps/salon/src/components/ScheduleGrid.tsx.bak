@@ -9,7 +9,6 @@ interface Props {
   startHour?: number;
   endHour?: number;
   onAppointmentMove?: (appointmentId: string, newStylistId: string, newStartTime: string) => void;
-  selectedDate?: Date;
 }
 
 export const ScheduleGrid: React.FC<Props> = ({ 
@@ -17,8 +16,7 @@ export const ScheduleGrid: React.FC<Props> = ({
   appointments,
   startHour = 9,
   endHour = 21,
-  onAppointmentMove,
-  selectedDate
+  onAppointmentMove
 }) => {
   const { now } = useCurrentTime();
   const timeSlots = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
@@ -26,8 +24,7 @@ export const ScheduleGrid: React.FC<Props> = ({
   const getAppointmentsForStylist = (stylistId: string, hour: number) => {
     return appointments.filter(apt => {
       const startDate = new Date(apt.start_time);
-      const sameDay = selectedDate ? startDate.toDateString() === selectedDate.toDateString() : true;
-      return apt.stylist_id === stylistId && startDate.getHours() === hour && sameDay;
+      return apt.stylist_id === stylistId && startDate.getHours() === hour;
     });
   };
 
@@ -45,7 +42,7 @@ export const ScheduleGrid: React.FC<Props> = ({
     if (!destination) return;
     
     // Extract appointment ID from draggableId (format: "apt-{appointmentId}")
-    const appointmentId = draggableId;
+    const appointmentId = draggableId.replace('apt-', '');
     const appointment = appointments.find(a => a.id === appointmentId);
     
     if (!appointment) return;
@@ -145,7 +142,7 @@ export const ScheduleGrid: React.FC<Props> = ({
                       }}
                     >
                       {getAppointmentsForStylist(stylist.id, hour).map((apt, index) => (
-                        <Draggable key={`apt-${apt.id}`} draggableId={apt.id} index={index}>
+                        <Draggable key={`apt-${apt.id}`} draggableId={`apt-${apt.id}`} index={index}>
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}

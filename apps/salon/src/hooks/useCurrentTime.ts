@@ -4,9 +4,13 @@ export const useCurrentTime = () => {
   const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
+    // Set initial time immediately
+    setNow(new Date());
+
+    // Update every second for more responsive display
     const timer = setInterval(() => {
       setNow(new Date());
-    }, 60000); // Update every minute
+    }, 1000);
 
     return () => clearInterval(timer);
   }, []);

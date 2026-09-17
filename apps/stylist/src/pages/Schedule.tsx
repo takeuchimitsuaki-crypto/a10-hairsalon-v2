@@ -3,12 +3,14 @@ import { WeekView } from '../components/WeekView';
 import { TabBar } from '../components/TabBar';
 import { useWeekDays } from '../hooks/useWeekDays';
 import { useMenus } from '../hooks/useMenus';
+import { useAppointments } from '../hooks/useAppointments';
 
 export const Schedule: React.FC = () => {
   const [activeTab, setActiveTab] = useState('schedule');
   const [currentDate, setCurrentDate] = useState(new Date());
   const weekDays = useWeekDays(currentDate);
   const { menus } = useMenus();
+  const { appointments, updateAppointment } = useAppointments();
 
   const handlePrevWeek = () => {
     const prev = new Date(currentDate);
@@ -94,7 +96,12 @@ export const Schedule: React.FC = () => {
         </div>
       </div>
 
-      <WeekView weekDays={weekDays} appointments={[]} businessHours={{ start: 9, end: 21 }} />
+      <WeekView
+        weekDays={weekDays}
+        appointments={appointments}
+        businessHours={{ start: 9, end: 21 }}
+        onUpdateAppointment={updateAppointment}
+      />
 
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>

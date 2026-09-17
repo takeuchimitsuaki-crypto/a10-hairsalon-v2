@@ -7,7 +7,37 @@ import { useAppointments } from '../hooks/useAppointments';
 export const Schedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { stylists, loading: loadingStylists } = useStylists();
-  const { appointments, loading: loadingAppointments } = useAppointments(undefined, selectedDate);
+  const { appointments, loading: loadingAppointments, refetch } = useAppointments(undefined, selectedDate);
+  const [isMoving, setIsMoving] = useState(false);
+
+  const handleAppointmentMove = async (appointmentId: string, newStylistId: string, newStartTime: string) => {
+    try {
+      setIsMoving(true);
+      
+      const response = await fetch('http://localhost:8787/api/appointments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: appointmentId,
+          stylist_id: newStylistId,
+          start_time: newStartTime
+        })
+      });
+
+      if (response.ok) {
+        alert('予約を移動しました');
+        // Refetch appointments to update the grid
+        refetch?.();
+      } else {
+        alert('予約の移動に失敗しました');
+      }
+    } catch (error) {
+      console.error('Error moving appointment:', error);
+      alert('エラーが発生しました');
+    } finally {
+      setIsMoving(false);
+    }
+  };
 
   if (loadingStylists || loadingAppointments) {
     return (
@@ -42,6 +72,7 @@ export const Schedule: React.FC = () => {
               borderRadius: '4px',
               fontSize: '14px'
             }}
+            disabled={isMoving}
           />
           <button
             onClick={() => setSelectedDate(new Date())}
@@ -52,11 +83,14 @@ export const Schedule: React.FC = () => {
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontSize: '14px'
+              fontSize: '14px',
+              opacity: isMoving ? 0.6 : 1
             }}
+            disabled={isMoving}
           >
             今日
           </button>
+          {isMoving && <span style={{ color: '#666', fontSize: '12px' }}>移動中...</span>}
         </div>
         
         <ScheduleGrid
@@ -64,6 +98,8 @@ export const Schedule: React.FC = () => {
           appointments={appointments}
           startHour={9}
           endHour={21}
+          onAppointmentMove={handleAppointmentMove}
+          selectedDate={selectedDate}
         />
       </div>
     </>
