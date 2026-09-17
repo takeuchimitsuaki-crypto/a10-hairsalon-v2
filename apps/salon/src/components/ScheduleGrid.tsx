@@ -10,15 +10,17 @@ interface Props {
   endHour?: number;
   onAppointmentMove?: (appointmentId: string, newStylistId: string, newStartTime: string) => void;
   selectedDate?: Date;
+  viewPeriod?: 'day' | 'week' | 'month';
 }
 
-export const ScheduleGrid: React.FC<Props> = ({ 
-  stylists, 
+export const ScheduleGrid: React.FC<Props> = ({
+  stylists,
   appointments,
   startHour = 9,
   endHour = 21,
   onAppointmentMove,
-  selectedDate
+  selectedDate,
+  viewPeriod = 'day'
 }) => {
   const { now } = useCurrentTime();
   const timeSlots = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);

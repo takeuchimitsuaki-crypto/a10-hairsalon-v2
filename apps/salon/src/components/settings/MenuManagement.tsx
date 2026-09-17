@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 interface Menu {
   id: string;
   salon_id: string;
+  stylist_id?: string;
   name: string;
   duration_minutes: number;
   price: number;
@@ -11,12 +12,20 @@ interface Menu {
   is_active: number;
 }
 
+interface Stylist {
+  id: string;
+  name: string;
+}
+
 export const MenuManagement: React.FC = () => {
   const [menus, setMenus] = useState<Menu[]>([]);
+  const [stylists, setStylists] = useState<Stylist[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [targetType, setTargetType] = useState<'salon' | 'stylist'>('salon');
+  const [selectedStylist, setSelectedStylist] = useState<string>('');
   const [formData, setFormData] = useState({
     name: '',
     duration_minutes: 30,
@@ -28,8 +37,25 @@ export const MenuManagement: React.FC = () => {
   const SALON_ID = 'salon_001';
 
   useEffect(() => {
+    fetchStylists();
     fetchMenus();
   }, []);
+
+  useEffect(() => {
+    if (stylists.length > 0 && !selectedStylist) {
+      setSelectedStylist(stylists[0].id);
+    }
+  }, [stylists, selectedStylist]);
+
+  const fetchStylists = async () => {
+    try {
+      const res = await fetch('http://localhost:8787/api/stylists');
+      const data = await res.json();
+      setStylists(data.results.filter((s: any) => s.is_active === 1));
+    } catch (err) {
+      console.error('スタイリスト取得エラー:', err);
+    }
+  };
 
   const fetchMenus = async () => {
     try {
@@ -47,6 +73,10 @@ export const MenuManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (targetType === 'stylist' && !selectedStylist) {
+      setError('スタイリストを選択してください');
+      return;
+    }
     try {
       if (editingId) {
         const res = await fetch(`http://localhost:8787/api/menus/${editingId}`, {
@@ -56,10 +86,15 @@ export const MenuManagement: React.FC = () => {
         });
         if (!res.ok) throw new Error('更新に失敗しました');
       } else {
+        const payload = {
+          salon_id: SALON_ID,
+          ...formData,
+          ...(targetType === 'stylist' && { stylist_id: selectedStylist })
+        };
         const res = await fetch('http://localhost:8787/api/menus', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ salon_id: SALON_ID, ...formData })
+          body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error('作成に失敗しました');
       }
@@ -70,6 +105,8 @@ export const MenuManagement: React.FC = () => {
         color_code: '#ff6b9d',
         description: ''
       });
+      setTargetType('salon');
+      setSelectedStylist('');
       setEditingId(null);
       setShowForm(false);
       fetchMenus();
@@ -149,6 +186,53 @@ export const MenuManagement: React.FC = () => {
           borderRadius: '8px',
           marginBottom: '20px'
         }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                対象 *
+              </label>
+              <select
+                value={targetType}
+                onChange={(e) => setTargetType(e.target.value as 'salon' | 'stylist')}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="salon">サロン（全体）</option>
+                <option value="stylist">スタイリスト個別</option>
+              </select>
+            </div>
+            {targetType === 'stylist' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  スタイリスト *
+                </label>
+                <select
+                  value={selectedStylist}
+                  onChange={(e) => setSelectedStylist(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="">選択してください</option>
+                  {stylists.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}>
               メニュー名 *

@@ -18,6 +18,7 @@ const DAYS = ['月', '火', '水', '木', '金', '土', '日'];
 
 export const WorkingHoursManagement: React.FC = () => {
   const [stylists, setStylists] = useState<Stylist[]>([]);
+  const [targetType, setTargetType] = useState<'salon' | 'stylist'>('stylist');
   const [selectedStylist, setSelectedStylist] = useState<string>('');
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,26 +128,55 @@ export const WorkingHoursManagement: React.FC = () => {
     <div>
       <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 20px 0' }}>営業時間設定</h2>
 
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-          スタイリスト選択
-        </label>
-        <select
-          value={selectedStylist}
-          onChange={(e) => setSelectedStylist(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            fontSize: '14px',
-            boxSizing: 'border-box'
-          }}
-        >
-          {stylists.map(s => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+            対象 *
+          </label>
+          <select
+            value={targetType}
+            onChange={(e) => {
+              setTargetType(e.target.value as 'salon' | 'stylist');
+              if (e.target.value === 'stylist' && stylists.length > 0) {
+                setSelectedStylist(stylists[0].id);
+              }
+            }}
+            style={{
+              width: '100%',
+              padding: '8px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '14px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <option value="salon">サロン（全体）</option>
+            <option value="stylist">スタイリスト個別</option>
+          </select>
+        </div>
+        {targetType === 'stylist' && (
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+              スタイリスト選択
+            </label>
+            <select
+              value={selectedStylist}
+              onChange={(e) => setSelectedStylist(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            >
+              {stylists.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}

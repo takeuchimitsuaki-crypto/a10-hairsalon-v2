@@ -4,11 +4,14 @@ import { ScheduleGrid } from '../components/ScheduleGrid';
 import { useStylists } from '../hooks/useStylists';
 import { useAppointments } from '../hooks/useAppointments';
 
+type ViewPeriod = 'day' | 'week' | 'month';
+
 export const Schedule: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { stylists, loading: loadingStylists } = useStylists();
   const { appointments, loading: loadingAppointments, refetch } = useAppointments(undefined, selectedDate);
   const [isMoving, setIsMoving] = useState(false);
+  const [viewPeriod, setViewPeriod] = useState<ViewPeriod>('day');
 
   const handleAppointmentMove = async (appointmentId: string, newStylistId: string, newStartTime: string) => {
     try {
@@ -60,37 +63,88 @@ export const Schedule: React.FC = () => {
           borderBottom: '1px solid #e0e0e0',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center'
+          alignItems: 'center',
+          justifyContent: 'space-between'
         }}>
-          <input
-            type="date"
-            value={selectedDate.toISOString().split('T')[0]}
-            onChange={(e) => setSelectedDate(new Date(e.target.value))}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              fontSize: '14px'
-            }}
-            disabled={isMoving}
-          />
-          <button
-            onClick={() => setSelectedDate(new Date())}
-            style={{
-              padding: '8px 16px',
-              background: '#1976d2',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              opacity: isMoving ? 0.6 : 1
-            }}
-            disabled={isMoving}
-          >
-            今日
-          </button>
-          {isMoving && <span style={{ color: '#666', fontSize: '12px' }}>移動中...</span>}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              type="date"
+              value={selectedDate.toISOString().split('T')[0]}
+              onChange={(e) => setSelectedDate(new Date(e.target.value))}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+              disabled={isMoving}
+            />
+            <button
+              onClick={() => setSelectedDate(new Date())}
+              style={{
+                padding: '8px 16px',
+                background: '#1976d2',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                opacity: isMoving ? 0.6 : 1
+              }}
+              disabled={isMoving}
+            >
+              今日
+            </button>
+            {isMoving && <span style={{ color: '#666', fontSize: '12px' }}>移動中...</span>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '5px', border: '1px solid #ddd', borderRadius: '4px', padding: '4px' }}>
+            <button
+              onClick={() => setViewPeriod('day')}
+              style={{
+                padding: '6px 12px',
+                background: viewPeriod === 'day' ? '#1976d2' : 'transparent',
+                color: viewPeriod === 'day' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: viewPeriod === 'day' ? 'bold' : 'normal'
+              }}
+            >
+              📅 日
+            </button>
+            <button
+              onClick={() => setViewPeriod('week')}
+              style={{
+                padding: '6px 12px',
+                background: viewPeriod === 'week' ? '#1976d2' : 'transparent',
+                color: viewPeriod === 'week' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: viewPeriod === 'week' ? 'bold' : 'normal'
+              }}
+            >
+              📋 週
+            </button>
+            <button
+              onClick={() => setViewPeriod('month')}
+              style={{
+                padding: '6px 12px',
+                background: viewPeriod === 'month' ? '#1976d2' : 'transparent',
+                color: viewPeriod === 'month' ? '#fff' : '#666',
+                border: 'none',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: viewPeriod === 'month' ? 'bold' : 'normal'
+              }}
+            >
+              📆 月
+            </button>
+          </div>
         </div>
         
         <ScheduleGrid
@@ -100,6 +154,7 @@ export const Schedule: React.FC = () => {
           endHour={21}
           onAppointmentMove={handleAppointmentMove}
           selectedDate={selectedDate}
+          viewPeriod={viewPeriod}
         />
       </div>
     </>
