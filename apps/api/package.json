@@ -10,7 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@a10/shared": "workspace:*"
+    "@a10/shared": "*"
   },
   "devDependencies": {
     "wrangler": "^3.25.0",
