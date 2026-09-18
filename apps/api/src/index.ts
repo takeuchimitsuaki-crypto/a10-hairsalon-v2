@@ -43,12 +43,138 @@ export default {
         });
       }
 
+      // Get availability for all stylists on a specific date
+      if (url.pathname === '/api/availability' && request.method === 'GET') {
+        const date = url.searchParams.get('date');
+        const menuId = url.searchParams.get('menu_id');
+
+        if (!date || !menuId) {
+          return new Response(JSON.stringify({
+            error: 'Missing required parameters: date, menu_id'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        try {
+          const dateObj = new Date(date);
+          const dayOfWeek = dateObj.getDay();
+          const dateStr = dateObj.toISOString().split('T')[0];
+
+          // Get menu duration
+          const menuRes = await db.prepare(
+            'SELECT duration_minutes FROM menus WHERE id = ?'
+          ).bind(menuId).first() as any;
+
+          if (!menuRes) {
+            return new Response(JSON.stringify({ error: 'Menu not found' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            });
+          }
+
+          const durationMinutes = menuRes.duration_minutes;
+
+          // Get all stylists
+          const stylistsRes = await db.prepare(`
+            SELECT s.id, s.name
+            FROM stylists s
+            WHERE s.is_active = 1
+            ORDER BY s.name
+          `).all() as any;
+
+          const stylists = stylistsRes.results || [];
+          const available = [];
+          const unavailable = [];
+
+          for (const stylist of stylists) {
+            // Check if stylist is off this date
+            const offDay = await db.prepare(
+              'SELECT id FROM off_days WHERE stylist_id = ? AND date = ?'
+            ).bind(stylist.id, dateStr).first() as any;
+
+            if (offDay) {
+              unavailable.push({
+                stylist_id: stylist.id,
+                name: stylist.name,
+                reason: 'Off day'
+              });
+              continue;
+            }
+
+            // Get working hours for this day
+            const workingHours = await db.prepare(
+              'SELECT start_time, end_time FROM working_hours WHERE stylist_id = ? AND day_of_week = ? AND is_active = 1'
+            ).bind(stylist.id, dayOfWeek).first() as any;
+
+            if (!workingHours) {
+              unavailable.push({
+                stylist_id: stylist.id,
+                name: stylist.name,
+                reason: 'No working hours'
+              });
+              continue;
+            }
+
+            // Get appointments for this stylist on this date
+            const appointments = await db.prepare(`
+              SELECT start_time, end_time
+              FROM appointments
+              WHERE stylist_id = ? AND DATE(start_time) = ? AND status = 'confirmed'
+              ORDER BY start_time
+            `).bind(stylist.id, dateStr).all() as any;
+
+            const appointmentList = (appointments.results || []) as any[];
+            const slots = generateAvailableSlots(
+              workingHours.start_time,
+              workingHours.end_time,
+              durationMinutes,
+              appointmentList,
+              dateStr
+            );
+
+            if (slots.length > 0) {
+              available.push({
+                stylist_id: stylist.id,
+                name: stylist.name,
+                available_count: slots.length,
+                slots
+              });
+            } else {
+              unavailable.push({
+                stylist_id: stylist.id,
+                name: stylist.name,
+                reason: 'No available slots'
+              });
+            }
+          }
+
+          return new Response(JSON.stringify({
+            date,
+            available,
+            unavailable,
+            success: true
+          }), {
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        } catch (error: any) {
+          return new Response(JSON.stringify({
+            error: 'Failed to calculate availability',
+            message: error.message
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+      }
+
       // Get all appointments
       if (url.pathname === '/api/appointments' && request.method === 'GET') {
         const { results } = await db.prepare(
           'SELECT * FROM appointments ORDER BY start_time DESC'
         ).all() as any;
-        
+
         return new Response(JSON.stringify({
           results: results || [],
           success: true,
@@ -709,6 +835,98 @@ export default {
           });
         }
       }
+      
+      // LINE Webhook
+      if (url.pathname === '/api/line/webhook' && request.method === 'POST') {
+        try {
+          const rawBody = await request.text();
+          const body = JSON.parse(rawBody);
+          const events = body.events || [];
+
+          for (const event of events) {
+            const lineUserId = event.source?.userId;
+            const replyToken = event.replyToken;
+            const channelAccessToken = env.LINE_CHANNEL_ACCESS_TOKEN;
+
+            if (!lineUserId || !replyToken || !channelAccessToken) continue;
+
+            if (event.type === 'follow') {
+              await sendLineReply(replyToken, channelAccessToken, {
+                type: 'text',
+                text: 'A10サロンへようこそ！「予約」とメッセージしていただければ、予約をお始めできます。'
+              });
+              const lineUsersId = `line_${lineUserId}`;
+              await db.prepare(
+                `INSERT INTO line_users (id, line_user_id, created_at, updated_at)
+                 VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                 ON CONFLICT(line_user_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`
+              ).bind(lineUsersId, lineUserId).run() as any;
+            }
+
+            if (event.type === 'message' && event.message?.type === 'text') {
+              const text = event.message.text;
+
+              if (text === '予約' || text === 'reservation') {
+                const { results: menus } = await db.prepare(
+                  'SELECT * FROM menus WHERE is_active = 1 ORDER BY display_order LIMIT 4'
+                ).all() as any;
+
+                const actions = menus?.map((m: any) => ({
+                  type: 'postback',
+                  label: `${m.name} ¥${Math.floor(m.price)}`,
+                  data: `action=select_menu&menu_id=${m.id}&menu_name=${encodeURIComponent(m.name)}`
+                })) || [];
+
+                await sendLineReply(replyToken, channelAccessToken, {
+                  type: 'template',
+                  altText: 'メニューを選択',
+                  template: { type: 'buttons', text: 'ご希望のメニューを選択してください', actions: actions.slice(0, 4) }
+                });
+              } else {
+                await sendLineReply(replyToken, channelAccessToken, {
+                  type: 'text',
+                  text: 'ご返信ありがとうございます。「予約」とメッセージしていただければ、予約フローをお始めできます。'
+                });
+              }
+            }
+
+            if (event.type === 'postback') {
+              const data = new URLSearchParams(event.postback.data);
+              const action = data.get('action');
+
+              if (action === 'select_menu') {
+                const menuId = data.get('menu_id');
+                const menuName = decodeURIComponent(data.get('menu_name') || '');
+                const sessionId = `session_${lineUserId}`;
+                await db.prepare(`INSERT OR REPLACE INTO booking_sessions (id, line_user_id, step, menu_id, menu_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(sessionId, lineUserId, 'menu_selected', menuId, menuName).run() as any;
+
+                const { results: stylists } = await db.prepare('SELECT * FROM stylists WHERE is_active = 1 ORDER BY name LIMIT 3').all() as any;
+
+                const stylistActions = [
+                  { type: 'postback', label: '指名なし', data: 'action=select_stylist&stylist_id=free&stylist_name=フリー' },
+                  ...(stylists?.map((s: any) => ({ type: 'postback', label: s.name, data: `action=select_stylist&stylist_id=${s.id}&stylist_name=${encodeURIComponent(s.name)}` })) || [])
+                ];
+
+                await sendLineReply(replyToken, channelAccessToken, { type: 'template', altText: 'スタイリストを選択', template: { type: 'buttons', text: 'ご指名するスタイリストを選択してください', actions: stylistActions.slice(0, 4) } });
+              }
+
+              if (action === 'select_stylist') {
+                const stylistId = data.get('stylist_id');
+                const stylistName = decodeURIComponent(data.get('stylist_name') || '');
+                await db.prepare(`UPDATE booking_sessions SET step = ?, stylist_id = ?, stylist_name = ?, updated_at = CURRENT_TIMESTAMP WHERE line_user_id = ?`).bind('stylist_selected', stylistId === 'free' ? null : stylistId, stylistName, lineUserId).run() as any;
+
+                await sendLineReply(replyToken, channelAccessToken, { type: 'text', text: '予約日時を入力してください（例：2026-09-20 14:00）' });
+              }
+            }
+          }
+
+          return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (error: any) {
+          console.error('LINE Webhook Error:', error);
+          return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        }
+      }
+
       // Not found
       return new Response(JSON.stringify({ 
         error: 'Not Found',
@@ -729,3 +947,62 @@ export default {
     }
   }
 } as ExportedHandler<WorkerEnv>;
+
+// Generate available time slots
+function generateAvailableSlots(
+  startTime: string,
+  endTime: string,
+  durationMinutes: number,
+  appointments: any[],
+  dateStr: string
+): string[] {
+  const slots: string[] = [];
+  const [startHour, startMin] = startTime.split(':').map(Number);
+  const [endHour, endMin] = endTime.split(':').map(Number);
+
+  let currentHour = startHour;
+  let currentMin = startMin;
+
+  while (currentHour < endHour || (currentHour === endHour && currentMin < endMin)) {
+    const slotStart = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
+    const slotEnd = new Date(dateStr);
+    slotEnd.setHours(currentHour, currentMin + durationMinutes);
+    const slotEndTime = `${String(slotEnd.getHours()).padStart(2, '0')}:${String(slotEnd.getMinutes()).padStart(2, '0')}`;
+
+    // Check if slot overlaps with any appointment
+    const isBooked = appointments.some((apt: any) => {
+      const aptStart = new Date(apt.start_time);
+      const aptEnd = new Date(apt.end_time);
+      const currentDateTime = new Date(`${dateStr}T${slotStart}`);
+      const currentEndTime = new Date(`${dateStr}T${slotEndTime}`);
+
+      return currentDateTime < aptEnd && currentEndTime > aptStart;
+    });
+
+    if (!isBooked) {
+      slots.push(slotStart);
+    }
+
+    currentMin += 30; // 30-minute intervals
+    if (currentMin >= 60) {
+      currentMin -= 60;
+      currentHour += 1;
+    }
+  }
+
+  return slots;
+}
+
+// LINE Reply Helper
+async function sendLineReply(replyToken: string, channelAccessToken: string, message: any) {
+  try {
+    await fetch('https://api.line.biz/v2/bot/message/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${channelAccessToken}` },
+      body: JSON.stringify({ replyToken, messages: [message] })
+    });
+  } catch (error) {
+    console.error('Failed to send LINE message:', error);
+  }
+}
+
