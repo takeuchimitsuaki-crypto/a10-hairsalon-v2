@@ -15,3 +15,13 @@ name = "a10-hairsalon-api-prod"
 binding = "DB"
 database_name = "a10-hairsalon-prod"
 database_id = "4ee369b0-85de-46ac-8173-06a5f0e9ecfe"
+
+[env.production.vars]
+LINE_CHANNEL_ID = "2011574483"
+LINE_CHANNEL_SECRET = "7bde4eb861d2e23dbea677cd29e98f4d"
+LINE_CHANNEL_ACCESS_TOKEN = """EoCbVpsHIUWG+hQ++NF7wZWqqPSUzqJGhIxuJX0K1UlSgiygjdx9utZMOqVk8/OHA0tJmrdSjTvSR0I8/xxDMJUapYCzreKf+yCHQTgb7D6jxIbxu9rpc5JtHxy8Ds06BKQci2DI4pzaQ/h88TjdngdB04t89/1O/w1cDnyilFU="""
+
+[vars]
+LINE_CHANNEL_ID = "2011574483"
+LINE_CHANNEL_SECRET = "7bde4eb861d2e23dbea677cd29e98f4d"
+LINE_CHANNEL_ACCESS_TOKEN = """EoCbVpsHIUWG+hQ++NF7wZWqqPSUzqJGhIxuJX0K1UlSgiygjdx9utZMOqVk8/OHA0tJmrdSjTvSR0I8/xxDMJUapYCzreKf+yCHQTgb7D6jxIbxu9rpc5JtHxy8Ds06BKQci2DI4pzaQ/h88TjdngdB04t89/1O/w1cDnyilFU="""
