@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Appointment } from '../types';
+import { API_BASE_URL } from '../config';
 
 export const useAppointments = (stylistId?: string, date?: Date) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -14,7 +15,7 @@ export const useAppointments = (stylistId?: string, date?: Date) => {
         if (stylistId) params.append('stylist_id', stylistId);
         if (date) params.append('date', date.toISOString().split('T')[0]);
 
-        const response = await fetch(`/api/appointments?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/api/appointments?${params}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });

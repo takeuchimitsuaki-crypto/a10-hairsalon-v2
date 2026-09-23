@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Stylist } from '../types';
+import { API_BASE_URL } from '../config';
 
 export const useStylists = (salonId?: string) => {
   const [stylists, setStylists] = useState<Stylist[]>([]);
@@ -13,7 +14,7 @@ export const useStylists = (salonId?: string) => {
         const params = new URLSearchParams();
         if (salonId) params.append('salon_id', salonId);
 
-        const response = await fetch(`/api/stylists?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/api/stylists?${params}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });

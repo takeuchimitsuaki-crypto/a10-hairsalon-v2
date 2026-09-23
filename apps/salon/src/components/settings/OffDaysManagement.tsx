@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 
 interface Stylist {
   id: string;
@@ -37,7 +38,7 @@ export const OffDaysManagement: React.FC = () => {
   const fetchStylists = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:8787/api/stylists');
+      const res = await fetch(`${API_BASE_URL}/api/stylists`);
       const data = await res.json();
       const active = data.results.filter((s: any) => s.is_active === 1);
       setStylists(active);
@@ -54,7 +55,7 @@ export const OffDaysManagement: React.FC = () => {
 
   const fetchOffDays = async (stylistId: string) => {
     try {
-      const res = await fetch(`http://localhost:8787/api/off-days/${stylistId}`);
+      const res = await fetch(`${API_BASE_URL}/api/off-days/${stylistId}`);
       const data = await res.json();
       setOffDays((data.results || []).sort((a: OffDay, b: OffDay) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch (err) {
@@ -68,7 +69,7 @@ export const OffDaysManagement: React.FC = () => {
     if (!selectedStylist) return;
 
     try {
-      const res = await fetch('http://localhost:8787/api/off-days', {
+      const res = await fetch(`${API_BASE_URL}/api/off-days`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -92,7 +93,7 @@ export const OffDaysManagement: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('この休みを削除しますか？')) return;
     try {
-      const res = await fetch(`http://localhost:8787/api/off-days/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/off-days/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('削除に失敗しました');

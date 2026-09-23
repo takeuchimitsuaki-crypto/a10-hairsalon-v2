@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 interface Menu {
   id: string;
@@ -41,8 +42,8 @@ export const Booking: React.FC = () => {
       try {
         setLoading(true);
         const [menusRes, stylistsRes] = await Promise.all([
-          fetch('http://localhost:8787/api/menus'),
-          fetch('http://localhost:8787/api/stylists')
+          fetch(`${API_BASE_URL}/api/menus`),
+          fetch(`${API_BASE_URL}/api/stylists`)
         ]);
 
         if (menusRes.ok) {
@@ -74,7 +75,7 @@ export const Booking: React.FC = () => {
       try {
         const dateStr = selectedDate.split('T')[0];
         const res = await fetch(
-          `http://localhost:8787/api/availability?date=${dateStr}&menu_id=${selectedMenu}`
+          `${API_BASE_URL}/api/availability?date=${dateStr}&menu_id=${selectedMenu}`
         );
 
         if (res.ok) {

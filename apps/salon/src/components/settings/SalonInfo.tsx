@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 
 interface Salon {
   id: string;
@@ -18,7 +19,7 @@ export const SalonInfo: React.FC = () => {
   useEffect(() => {
     const fetchSalon = async () => {
       try {
-        const res = await fetch('http://localhost:8787/api/salon/settings');
+        const res = await fetch(`${API_BASE_URL}/api/salon/settings`);
         const data = await res.json();
         setSalon(data.result);
         setFormData(data.result || {});
@@ -35,7 +36,7 @@ export const SalonInfo: React.FC = () => {
   const handleSave = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:8787/api/salon/settings', {
+      const res = await fetch(`${API_BASE_URL}/api/salon/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)

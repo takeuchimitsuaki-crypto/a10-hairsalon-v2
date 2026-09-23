@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 
 interface Stylist {
   id: string;
@@ -33,7 +34,7 @@ export const StylistManagement: React.FC = () => {
   const fetchStylists = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:8787/api/stylists');
+      const res = await fetch(`${API_BASE_URL}/api/stylists`);
       const data = await res.json();
       setStylists(data.results.filter((s: Stylist) => s.is_active === 1));
     } catch (err) {
@@ -48,14 +49,14 @@ export const StylistManagement: React.FC = () => {
     e.preventDefault();
     try {
       if (editingId) {
-        const res = await fetch(`http://localhost:8787/api/stylists/${editingId}`, {
+        const res = await fetch(`${API_BASE_URL}/api/stylists/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData)
         });
         if (!res.ok) throw new Error('更新に失敗しました');
       } else {
-        const res = await fetch('http://localhost:8787/api/stylists', {
+        const res = await fetch(`${API_BASE_URL}/api/stylists`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ salon_id: SALON_ID, ...formData })
@@ -86,7 +87,7 @@ export const StylistManagement: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('このスタイリストを削除しますか？')) return;
     try {
-      const res = await fetch(`http://localhost:8787/api/stylists/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/stylists/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('削除に失敗しました');
