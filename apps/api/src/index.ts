@@ -838,93 +838,116 @@ export default {
       
       // LINE Webhook
       if (url.pathname === '/api/line/webhook' && request.method === 'POST') {
+        const jsonHeaders = { 'Content-Type': 'application/json' };
+        const channelSecret = env.LINE_CHANNEL_SECRET;
+        if (!channelSecret) {
+          console.error('LINE Webhook Error: LINE_CHANNEL_SECRET is not configured');
+          return new Response(JSON.stringify({ error: 'Server misconfigured' }), { status: 500, headers: jsonHeaders });
+        }
+
+        // 署名検証は必ず生のリクエストボディに対して行う（JSON.parse 後の再シリアライズは不可）
+        const rawBody = await request.text();
+        const signature = request.headers.get('x-line-signature');
+        if (!signature || !(await verifyLineSignature(rawBody, signature, channelSecret))) {
+          console.warn('LINE Webhook: invalid signature');
+          return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 401, headers: jsonHeaders });
+        }
+
+        let events: any[] = [];
         try {
-          const rawBody = await request.text();
-          const body = JSON.parse(rawBody);
-          const events = body.events || [];
+          events = JSON.parse(rawBody).events || [];
+        } catch {
+          return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: jsonHeaders });
+        }
 
-          for (const event of events) {
-            const lineUserId = event.source?.userId;
-            const replyToken = event.replyToken;
-            const channelAccessToken = env.LINE_CHANNEL_ACCESS_TOKEN;
+        const channelAccessToken = env.LINE_CHANNEL_ACCESS_TOKEN;
+        if (!channelAccessToken && events.length > 0) {
+          console.error('LINE Webhook Error: LINE_CHANNEL_ACCESS_TOKEN is not configured');
+        }
 
-            if (!lineUserId || !replyToken || !channelAccessToken) continue;
+        // Webhook検証（events が空）を含め、署名が正しいリクエストには常に 200 を返す。
+        // 個々のイベント処理の失敗で 500 を返すと LINE 側で再送・エラー扱いになるため、ログのみ残す。
+        for (const event of events) {
+          try {
+              const lineUserId = event.source?.userId;
+              const replyToken = event.replyToken;
 
-            if (event.type === 'follow') {
-              await sendLineReply(replyToken, channelAccessToken, {
-                type: 'text',
-                text: 'A10サロンへようこそ！「予約」とメッセージしていただければ、予約をお始めできます。'
-              });
-              const lineUsersId = `line_${lineUserId}`;
-              await db.prepare(
-                `INSERT INTO line_users (id, line_user_id, created_at, updated_at)
-                 VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                 ON CONFLICT(line_user_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`
-              ).bind(lineUsersId, lineUserId).run() as any;
-            }
+              if (!lineUserId || !replyToken || !channelAccessToken) continue;
 
-            if (event.type === 'message' && event.message?.type === 'text') {
-              const text = event.message.text;
-
-              if (text === '予約' || text === 'reservation') {
-                const { results: menus } = await db.prepare(
-                  'SELECT * FROM menus WHERE is_active = 1 ORDER BY display_order LIMIT 4'
-                ).all() as any;
-
-                const actions = menus?.map((m: any) => ({
-                  type: 'postback',
-                  label: `${m.name} ¥${Math.floor(m.price)}`,
-                  data: `action=select_menu&menu_id=${m.id}&menu_name=${encodeURIComponent(m.name)}`
-                })) || [];
-
-                await sendLineReply(replyToken, channelAccessToken, {
-                  type: 'template',
-                  altText: 'メニューを選択',
-                  template: { type: 'buttons', text: 'ご希望のメニューを選択してください', actions: actions.slice(0, 4) }
-                });
-              } else {
+              if (event.type === 'follow') {
                 await sendLineReply(replyToken, channelAccessToken, {
                   type: 'text',
-                  text: 'ご返信ありがとうございます。「予約」とメッセージしていただければ、予約フローをお始めできます。'
+                  text: 'A10サロンへようこそ！「予約」とメッセージしていただければ、予約をお始めできます。'
                 });
-              }
-            }
-
-            if (event.type === 'postback') {
-              const data = new URLSearchParams(event.postback.data);
-              const action = data.get('action');
-
-              if (action === 'select_menu') {
-                const menuId = data.get('menu_id');
-                const menuName = decodeURIComponent(data.get('menu_name') || '');
-                const sessionId = `session_${lineUserId}`;
-                await db.prepare(`INSERT OR REPLACE INTO booking_sessions (id, line_user_id, step, menu_id, menu_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(sessionId, lineUserId, 'menu_selected', menuId, menuName).run() as any;
-
-                const { results: stylists } = await db.prepare('SELECT * FROM stylists WHERE is_active = 1 ORDER BY name LIMIT 3').all() as any;
-
-                const stylistActions = [
-                  { type: 'postback', label: '指名なし', data: 'action=select_stylist&stylist_id=free&stylist_name=フリー' },
-                  ...(stylists?.map((s: any) => ({ type: 'postback', label: s.name, data: `action=select_stylist&stylist_id=${s.id}&stylist_name=${encodeURIComponent(s.name)}` })) || [])
-                ];
-
-                await sendLineReply(replyToken, channelAccessToken, { type: 'template', altText: 'スタイリストを選択', template: { type: 'buttons', text: 'ご指名するスタイリストを選択してください', actions: stylistActions.slice(0, 4) } });
+                const lineUsersId = `line_${lineUserId}`;
+                await db.prepare(
+                  `INSERT INTO line_users (id, line_user_id, created_at, updated_at)
+                   VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                   ON CONFLICT(line_user_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP`
+                ).bind(lineUsersId, lineUserId).run() as any;
               }
 
-              if (action === 'select_stylist') {
-                const stylistId = data.get('stylist_id');
-                const stylistName = decodeURIComponent(data.get('stylist_name') || '');
-                await db.prepare(`UPDATE booking_sessions SET step = ?, stylist_id = ?, stylist_name = ?, updated_at = CURRENT_TIMESTAMP WHERE line_user_id = ?`).bind('stylist_selected', stylistId === 'free' ? null : stylistId, stylistName, lineUserId).run() as any;
+              if (event.type === 'message' && event.message?.type === 'text') {
+                const text = event.message.text;
 
-                await sendLineReply(replyToken, channelAccessToken, { type: 'text', text: '予約日時を入力してください（例：2026-09-20 14:00）' });
+                if (text === '予約' || text === 'reservation') {
+                  const { results: menus } = await db.prepare(
+                    'SELECT * FROM menus WHERE is_active = 1 ORDER BY display_order LIMIT 4'
+                  ).all() as any;
+
+                  const actions = menus?.map((m: any) => ({
+                    type: 'postback',
+                    label: `${m.name} ¥${Math.floor(m.price)}`,
+                    data: `action=select_menu&menu_id=${m.id}&menu_name=${encodeURIComponent(m.name)}`
+                  })) || [];
+
+                  await sendLineReply(replyToken, channelAccessToken, {
+                    type: 'template',
+                    altText: 'メニューを選択',
+                    template: { type: 'buttons', text: 'ご希望のメニューを選択してください', actions: actions.slice(0, 4) }
+                  });
+                } else {
+                  await sendLineReply(replyToken, channelAccessToken, {
+                    type: 'text',
+                    text: 'ご返信ありがとうございます。「予約」とメッセージしていただければ、予約フローをお始めできます。'
+                  });
+                }
               }
-            }
+
+              if (event.type === 'postback') {
+                const data = new URLSearchParams(event.postback.data);
+                const action = data.get('action');
+
+                if (action === 'select_menu') {
+                  const menuId = data.get('menu_id');
+                  const menuName = decodeURIComponent(data.get('menu_name') || '');
+                  const sessionId = `session_${lineUserId}`;
+                  await db.prepare(`INSERT OR REPLACE INTO booking_sessions (id, line_user_id, step, menu_id, menu_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(sessionId, lineUserId, 'menu_selected', menuId, menuName).run() as any;
+
+                  const { results: stylists } = await db.prepare('SELECT * FROM stylists WHERE is_active = 1 ORDER BY name LIMIT 3').all() as any;
+
+                  const stylistActions = [
+                    { type: 'postback', label: '指名なし', data: 'action=select_stylist&stylist_id=free&stylist_name=フリー' },
+                    ...(stylists?.map((s: any) => ({ type: 'postback', label: s.name, data: `action=select_stylist&stylist_id=${s.id}&stylist_name=${encodeURIComponent(s.name)}` })) || [])
+                  ];
+
+                  await sendLineReply(replyToken, channelAccessToken, { type: 'template', altText: 'スタイリストを選択', template: { type: 'buttons', text: 'ご指名するスタイリストを選択してください', actions: stylistActions.slice(0, 4) } });
+                }
+
+                if (action === 'select_stylist') {
+                  const stylistId = data.get('stylist_id');
+                  const stylistName = decodeURIComponent(data.get('stylist_name') || '');
+                  await db.prepare(`UPDATE booking_sessions SET step = ?, stylist_id = ?, stylist_name = ?, updated_at = CURRENT_TIMESTAMP WHERE line_user_id = ?`).bind('stylist_selected', stylistId === 'free' ? null : stylistId, stylistName, lineUserId).run() as any;
+
+                  await sendLineReply(replyToken, channelAccessToken, { type: 'text', text: '予約日時を入力してください（例：2026-09-20 14:00）' });
+                }
+              }
+          } catch (error: any) {
+            console.error('LINE Webhook event error:', event?.type, error?.message);
           }
-
-          return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-        } catch (error: any) {
-          console.error('LINE Webhook Error:', error);
-          return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
+
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: jsonHeaders });
       }
 
       // Not found
@@ -993,14 +1016,37 @@ function generateAvailableSlots(
   return slots;
 }
 
+// LINE Webhook 署名検証: base64(HMAC-SHA256(channelSecret, rawBody)) === x-line-signature
+// crypto.subtle.verify で比較するため定数時間比較になる
+async function verifyLineSignature(rawBody: string, signature: string, channelSecret: string): Promise<boolean> {
+  let signatureBytes: Uint8Array<ArrayBuffer>;
+  try {
+    signatureBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+  } catch {
+    return false;
+  }
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(channelSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify']
+  );
+  return crypto.subtle.verify('HMAC', key, signatureBytes, encoder.encode(rawBody));
+}
+
 // LINE Reply Helper
 async function sendLineReply(replyToken: string, channelAccessToken: string, message: any) {
   try {
-    await fetch('https://api.line.biz/v2/bot/message/reply', {
+    const res = await fetch('https://api.line.me/v2/bot/message/reply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${channelAccessToken}` },
       body: JSON.stringify({ replyToken, messages: [message] })
     });
+    if (!res.ok) {
+      console.error('LINE reply API error:', res.status, await res.text());
+    }
   } catch (error) {
     console.error('Failed to send LINE message:', error);
   }
