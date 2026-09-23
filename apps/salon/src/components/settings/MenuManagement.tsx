@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../auth/client';
 
 interface Menu {
   id: string;
@@ -74,7 +74,7 @@ export const MenuManagement: React.FC = () => {
 
   const fetchStylists = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/stylists`);
+      const res = await apiFetch(`/api/stylists`);
       const data = await res.json();
       setStylists(data.results.filter((s: any) => s.is_active === 1));
     } catch (err) {
@@ -85,7 +85,7 @@ export const MenuManagement: React.FC = () => {
   const fetchMenus = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/menus`);
+      const res = await apiFetch(`/api/menus`);
       const data = await res.json();
       setMenus(data.results);
     } catch (err) {
@@ -98,7 +98,7 @@ export const MenuManagement: React.FC = () => {
 
   const fetchMenuSets = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/menu-sets?salon_id=salon_001`);
+      const res = await apiFetch(`/api/menu-sets?salon_id=salon_001`);
       const data = await res.json();
       setMenuSets(data.results);
     } catch (err) {
@@ -114,7 +114,7 @@ export const MenuManagement: React.FC = () => {
     }
     try {
       if (editingId) {
-        const res = await fetch(`${API_BASE_URL}/api/menus/${editingId}`, {
+        const res = await apiFetch(`/api/menus/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(singleMenuForm)
@@ -126,7 +126,7 @@ export const MenuManagement: React.FC = () => {
           ...singleMenuForm,
           ...(targetType === 'stylist' && { stylist_id: selectedStylist })
         };
-        const res = await fetch(`${API_BASE_URL}/api/menus`, {
+        const res = await apiFetch(`/api/menus`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -166,7 +166,7 @@ export const MenuManagement: React.FC = () => {
   const handleDeleteSingleMenu = async (id: string) => {
     if (!window.confirm('このメニューを削除しますか？')) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/menus/${id}`, {
+      const res = await apiFetch(`/api/menus/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('削除に失敗しました');
@@ -185,14 +185,14 @@ export const MenuManagement: React.FC = () => {
     }
     try {
       if (editingId) {
-        const res = await fetch(`${API_BASE_URL}/api/menu-sets/${editingId}`, {
+        const res = await apiFetch(`/api/menu-sets/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(setMenuForm)
         });
         if (!res.ok) throw new Error('更新に失敗しました');
       } else {
-        const res = await fetch(`${API_BASE_URL}/api/menu-sets`, {
+        const res = await apiFetch(`/api/menu-sets`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ salon_id: SALON_ID, ...setMenuForm })
@@ -232,7 +232,7 @@ export const MenuManagement: React.FC = () => {
   const handleDeleteSetMenu = async (id: string) => {
     if (!window.confirm('このセットメニューを削除しますか？')) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/menu-sets/${id}`, {
+      const res = await apiFetch(`/api/menu-sets/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('削除に失敗しました');

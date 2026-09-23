@@ -1,22 +1,52 @@
 import { WorkerEnv } from './types';
+import { corsHeadersFor, json } from './http';
+import { accessFor } from './auth/policy';
+import { authenticate, StaffContext } from './auth/session';
+import { BOOKABLE_STYLIST_WHERE, PUBLIC_STYLIST_COLUMNS, handleStaffRoutes, listLoginStaff, login, logout, me } from './staff';
 
 export default {
   async fetch(request: Request, env: WorkerEnv) {
     const url = new URL(request.url);
     const db = env.DB;
 
-    // CORS headers
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    };
+    const corsHeaders = corsHeadersFor(request);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
     try {
+      // 認証・権限チェック（すべての API で、各ハンドラより前に行う）
+      const access = accessFor(request.method, url.pathname);
+      let staff: StaffContext | null = null;
+      if (access.kind !== 'public') {
+        staff = await authenticate(request, db);
+        if (!staff) {
+          return json({ error: 'ログインが必要です' }, 401, corsHeaders);
+        }
+        if (access.kind === 'permission' && !(staff.permissions as string[]).includes(access.permission)) {
+          return json({ error: 'この操作を行う権限がありません', required_permission: access.permission }, 403, corsHeaders);
+        }
+      }
+
+      // ================= STAFF AUTH =================
+      if (url.pathname === '/api/auth/staff' && request.method === 'GET') {
+        return listLoginStaff(db, corsHeaders);
+      }
+      if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+        return login(request, env, db, corsHeaders);
+      }
+      if (staff && url.pathname === '/api/auth/me' && request.method === 'GET') {
+        return me(staff, corsHeaders);
+      }
+      if (staff && url.pathname === '/api/auth/logout' && request.method === 'POST') {
+        return logout(staff, db, corsHeaders);
+      }
+      if (staff) {
+        const staffResponse = await handleStaffRoutes(request, env, db, staff, corsHeaders);
+        if (staffResponse) return staffResponse;
+      }
+
       // Health check
       if (url.pathname === '/api/health') {
         return new Response(JSON.stringify({
@@ -28,10 +58,10 @@ export default {
         });
       }
 
-      // Get all stylists
+      // 予約を受けるスタッフの公開情報（ログイン不要。認証関連の列は返さない）
       if (url.pathname === '/api/stylists' && request.method === 'GET') {
         const { results } = await db.prepare(
-          'SELECT * FROM stylists ORDER BY created_at DESC'
+          `SELECT ${PUBLIC_STYLIST_COLUMNS} FROM stylists WHERE ${BOOKABLE_STYLIST_WHERE} ORDER BY created_at`
         ).all() as any;
         
         return new Response(JSON.stringify({
@@ -77,12 +107,9 @@ export default {
           const durationMinutes = menuRes.duration_minutes;
 
           // Get all stylists
-          const stylistsRes = await db.prepare(`
-            SELECT s.id, s.name
-            FROM stylists s
-            WHERE s.is_active = 1
-            ORDER BY s.name
-          `).all() as any;
+          const stylistsRes = await db.prepare(
+            `SELECT id, name FROM stylists WHERE ${BOOKABLE_STYLIST_WHERE} ORDER BY name`
+          ).all() as any;
 
           const stylists = stylistsRes.results || [];
           const available = [];
@@ -270,78 +297,7 @@ export default {
         });
       }
 
-      // ================= STYLISTS =================
-      // Create stylist
-      if (url.pathname === '/api/stylists' && request.method === 'POST') {
-        const body = await request.json() as any;
-        const { salon_id, name, email, phone, bio, avatar_url } = body;
-        const id = `stylist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        const { success } = await db.prepare(
-          `INSERT INTO stylists (id, salon_id, name, email, phone, bio, avatar_url, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-        ).bind(id, salon_id, name, email || null, phone || null, bio || null, avatar_url || null).run() as any;
-
-        if (success) {
-          return new Response(JSON.stringify({
-            success: true,
-            id,
-            message: 'Stylist created'
-          }), {
-            status: 201,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
-      }
-
-      // Update stylist
-      if (url.pathname.match(/^\/api\/stylists\/[^/]+$/) && request.method === 'PUT') {
-        const id = url.pathname.split('/').pop();
-        const body = await request.json() as any;
-        const { name, email, phone, bio, avatar_url, is_active } = body;
-
-        const updates = [];
-        const bindings = [];
-        if (name !== undefined) { updates.push('name = ?'); bindings.push(name); }
-        if (email !== undefined) { updates.push('email = ?'); bindings.push(email); }
-        if (phone !== undefined) { updates.push('phone = ?'); bindings.push(phone); }
-        if (bio !== undefined) { updates.push('bio = ?'); bindings.push(bio); }
-        if (avatar_url !== undefined) { updates.push('avatar_url = ?'); bindings.push(avatar_url); }
-        if (is_active !== undefined) { updates.push('is_active = ?'); bindings.push(is_active ? 1 : 0); }
-
-        updates.push('updated_at = CURRENT_TIMESTAMP');
-        bindings.push(id);
-
-        const { success } = await db.prepare(
-          `UPDATE stylists SET ${updates.join(', ')} WHERE id = ?`
-        ).bind(...bindings).run() as any;
-
-        if (success) {
-          return new Response(JSON.stringify({
-            success: true,
-            message: 'Stylist updated'
-          }), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
-      }
-
-      // Delete stylist
-      if (url.pathname.match(/^\/api\/stylists\/[^/]+$/) && request.method === 'DELETE') {
-        const id = url.pathname.split('/').pop();
-        const { success } = await db.prepare(
-          'UPDATE stylists SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-        ).bind(id).run() as any;
-
-        if (success) {
-          return new Response(JSON.stringify({
-            success: true,
-            message: 'Stylist deleted'
-          }), {
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
-      }
+      // スタッフの追加・編集・削除は /api/staff（src/staff.ts）で権限を検証して行う
 
       // ================= MENUS =================
       // Create menu
@@ -770,6 +726,9 @@ export default {
             headers: { 'Content-Type': 'application/json', ...corsHeaders }
           });
         }
+        if (!canEditStylistSchedule(staff!, stylist_id)) {
+          return json({ error: '他のスタッフのプライベートタイムを変更する権限がありません' }, 403, corsHeaders);
+        }
 
         const id = `private_time_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -792,6 +751,13 @@ export default {
       // Update private time block
       if (url.pathname.match(/^\/api\/private-time\/[^/]+$/) && request.method === 'PUT') {
         const id = url.pathname.split('/').pop();
+        const block = await db.prepare('SELECT stylist_id FROM private_time WHERE id = ?').bind(id).first() as any;
+        if (!block) {
+          return json({ error: 'Private time block not found' }, 404, corsHeaders);
+        }
+        if (!canEditStylistSchedule(staff!, block.stylist_id)) {
+          return json({ error: '他のスタッフのプライベートタイムを変更する権限がありません' }, 403, corsHeaders);
+        }
         const body = await request.json() as any;
         const { start_time, end_time, reason } = body;
 
@@ -821,6 +787,13 @@ export default {
       // Delete private time block
       if (url.pathname.match(/^\/api\/private-time\/[^/]+$/) && request.method === 'DELETE') {
         const id = url.pathname.split('/').pop();
+        const block = await db.prepare('SELECT stylist_id FROM private_time WHERE id = ?').bind(id).first() as any;
+        if (!block) {
+          return json({ error: 'Private time block not found' }, 404, corsHeaders);
+        }
+        if (!canEditStylistSchedule(staff!, block.stylist_id)) {
+          return json({ error: '他のスタッフのプライベートタイムを変更する権限がありません' }, 403, corsHeaders);
+        }
 
         const { success } = await db.prepare(
           'UPDATE private_time SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
@@ -924,7 +897,7 @@ export default {
                   const sessionId = `session_${lineUserId}`;
                   await db.prepare(`INSERT OR REPLACE INTO booking_sessions (id, line_user_id, step, menu_id, menu_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(sessionId, lineUserId, 'menu_selected', menuId, menuName).run() as any;
 
-                  const { results: stylists } = await db.prepare('SELECT * FROM stylists WHERE is_active = 1 ORDER BY name LIMIT 3').all() as any;
+                  const { results: stylists } = await db.prepare(`SELECT id, name FROM stylists WHERE ${BOOKABLE_STYLIST_WHERE} ORDER BY name LIMIT 3`).all() as any;
 
                   const stylistActions = [
                     { type: 'postback', label: '指名なし', data: 'action=select_stylist&stylist_id=free&stylist_name=フリー' },
@@ -970,6 +943,11 @@ export default {
     }
   }
 } as ExportedHandler<WorkerEnv>;
+
+// プライベートタイムは本人なら変更できる。他のスタッフの分は change_settings が必要
+function canEditStylistSchedule(staff: StaffContext, stylistId: string): boolean {
+  return staff.id === stylistId || (staff.permissions as string[]).includes('change_settings');
+}
 
 // Generate available time slots
 function generateAvailableSlots(

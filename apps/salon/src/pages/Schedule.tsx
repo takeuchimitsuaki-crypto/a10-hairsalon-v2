@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { ScheduleGrid } from '../components/ScheduleGrid';
 import { useStylists } from '../hooks/useStylists';
 import { useAppointments } from '../hooks/useAppointments';
-import { API_BASE_URL } from '../config';
+import { apiFetch } from '../auth/client';
 
 type ViewPeriod = 'day' | 'week' | 'month';
 
@@ -18,7 +18,7 @@ export const Schedule: React.FC = () => {
     try {
       setIsMoving(true);
       
-      const response = await fetch(`${API_BASE_URL}/api/appointments`, {
+      const response = await apiFetch(`/api/appointments`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

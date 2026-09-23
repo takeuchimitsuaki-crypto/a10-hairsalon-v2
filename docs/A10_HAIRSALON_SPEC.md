@@ -239,24 +239,47 @@ CREATE TABLE chart_formulas (          -- 薬剤配合（1 カルテに複数）
 
 | 仕様 | 状況 |
 |---|---|
-| スタッフ（管理者・スタイリスト）のログイン | ❌ API に認証が一切無い。全エンドポイントが誰でも読み書きできる |
+| スタッフのログイン（スタッフ選択 + 6桁PIN） | 🟡 API・Salon App・Stylist App のログイン画面を実装（ローカルで確認済み、本番未反映） |
+| スタッフ権限（役割 + 個別権限） | 🟡 API で全権限を検証。カルテ編集・顧客削除・CSV は機能自体が未実装のため、権限の定義と設定画面のみ |
 | お客様の電話番号 + ワンタイムコードでのログイン | ❌ 開発メモでは完了扱いだが、リポジトリに該当コード（`/api/auth/phone`, `/api/auth/verify`, `0004_auth_system.sql`）が存在しない（未 push の可能性） |
-| スタッフ権限 | 🔁 旧版から引き継ぎ（❌） |
 
-**スタッフ権限の仕様**（旧版から引き継ぎ）
+**スタッフ登録**
 
-- 役割: `salon_admin`（管理者） / `salon_staff`（受付など） / `stylist`
-- 管理者がスタッフごとに以下の権限を ON/OFF できる（既定はすべて OFF）
+- 必須は名前のみ。メールアドレス・電話番号は任意のプロフィール情報（空欄は NULL で保存）。
+- `accepts_bookings`（予約を受ける）: ON のスタッフだけを LINE の指名候補・予約表・空き時間計算に出す（条件: `is_active = 1 AND accepts_bookings = 1`）。受付・アシスタントは OFF。
+- 削除は論理削除（`is_active = 0`）。予約・カルテなどの関連データは残す。
+
+**ログイン**（Salon App / Stylist App 共通の認証基盤。`packages/shared/src/auth`）
+
+- 「スタッフを選択 → 6桁の数字のPINを入力」。同じ数字の繰り返し・連番（123456 など）は不可。
+- PIN は平文保存しない。PBKDF2-SHA256 + スタッフごとの salt + Workers Secret `PIN_PEPPER` の HMAC でハッシュ化（`apps/api/src/auth/pin.ts`）。
+- 5回連続で失敗すると15分ロック。
+- セッション: ランダムなトークンを発行し、DB には SHA-256 ハッシュのみ保存（`staff_sessions`）。最後の操作から12時間有効。ブラウザでは sessionStorage に置き、タブを閉じると再ログイン。PIN変更・無効化・役割変更でそのスタッフのセッションを無効化。
+- 最初の owner は `apps/api/scripts/setup-owner.ts` で設定する（本人がターミナルで実行し、PIN は画面に表示しない入力でのみ受け取る）。
+
+**役割**
+
+| 役割 | 内容 |
+|---|---|
+| `owner` | 全権限。admin の任命・変更ができる。最後の owner は削除・無効化・降格できない |
+| `admin` | 全権限を持つ管理者。staff / stylist の役割・権限・PIN を変更できる。owner / admin の任命・変更はできない |
+| `staff` | 受付・アシスタント等。個別に付与された権限のみ |
+| `stylist` | 施術・予約を担当。個別に付与された権限のみ |
+
+**個別権限**（staff / stylist に owner・admin が ON/OFF する。既定はすべて OFF）
 
 | 権限キー | 内容 |
 |---|---|
-| `add_remove_staff` | スタッフの追加・削除 |
-| `change_settings` | 店舗設定・メニュー・予約ルールの変更 |
+| `add_remove_staff` | スタッフの追加・削除（無効化）・プロフィール編集 |
+| `change_settings` | サロン情報・メニュー・営業時間・休日・予約ルールなど店舗全体の設定 |
 | `edit_records` | カルテの編集 |
 | `delete_customers` | 顧客の削除 |
 | `export_csv` | CSV エクスポート |
 
-- 権限の一覧・変更は管理者のみ可能。
+- 権限の一覧・変更は owner / admin のみ。権限はリクエストごとに DB から読むため、変更は即時に反映される。
+- 権限の検証はすべて API 側で行う（`apps/api/src/auth/policy.ts` に API ごとの条件。記載の無い API はログイン必須）。画面での非表示は補助。
+- ログイン不要のまま維持する API: `GET /api/stylists`（公開用の id・名前・紹介・画像のみ）、`GET /api/menus`、`GET /api/menu-sets`、`GET /api/availability`、`GET /api/salon/settings`、LINE Webhook（LINE の署名で検証）。
+- 公開 API から `pin_hash`・権限・セッション・ロック状態などの認証関連情報は返さない。
 - 追加で検討: 会話メモ・アレルギー情報など個人情報の閲覧範囲、売上の閲覧権限。
 
 ---
@@ -312,7 +335,7 @@ LiME からどの形式でデータを書き出せるかは未確認。
 | B-2 | Salon App の予約移動が `PUT /api/appointments`（ID なし）を呼んでおり、API の `PUT /api/appointments/:id` に一致しないため失敗する |
 | B-3 | `PUT /api/appointments/:id` が `end_time` を更新しないため、移動すると所要時間が変わる |
 | B-4 | LINE 返信の URL が `api.line.biz`（正: `api.line.me`）。署名検証も無い |
-| B-5 | API に認証が無い |
+| B-5 | API に認証が無い（スタッフ認証を実装済み・本番未反映。§5） |
 | B-6 | 各画面が `http://localhost:8787` を直接呼んでおり、本番 API の URL に切り替わらない |
 | B-7 | `GET /api/stylists` など一覧 API が `salon_id` で絞り込んでいない |
 

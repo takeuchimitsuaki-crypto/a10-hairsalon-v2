@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
 import { Header } from '../components/Header';
 import { SalonInfo } from '../components/settings/SalonInfo';
-import { StylistManagement } from '../components/settings/StylistManagement';
+import { StaffManagement } from '../components/settings/StaffManagement';
 import { MenuManagement } from '../components/settings/MenuManagement';
 import { WorkingHoursManagement } from '../components/settings/WorkingHoursManagement';
 import { OffDaysManagement } from '../components/settings/OffDaysManagement';
+import { useAuth } from '../auth/AuthContext';
 
-type Tab = 'salon' | 'stylists' | 'menus' | 'hours' | 'offdays';
+type Tab = 'salon' | 'staff' | 'menus' | 'hours' | 'offdays';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'salon', label: 'サロン基本設定', icon: '🏢' },
-  { id: 'stylists', label: 'スタイリスト管理', icon: '👩‍💼' },
-  { id: 'menus', label: 'メニュー管理', icon: '✂️' },
-  { id: 'hours', label: '営業時間設定', icon: '⏰' },
-  { id: 'offdays', label: '休み管理', icon: '📅' },
+// requiresSettings: change_settings 権限が無いスタッフには表示しない（API 側でも拒否される）
+const TABS: { id: Tab; label: string; icon: string; requiresSettings: boolean }[] = [
+  { id: 'salon', label: 'サロン基本設定', icon: '🏢', requiresSettings: true },
+  { id: 'staff', label: 'スタッフ管理', icon: '👩‍💼', requiresSettings: false },
+  { id: 'menus', label: 'メニュー管理', icon: '✂️', requiresSettings: true },
+  { id: 'hours', label: '営業時間設定', icon: '⏰', requiresSettings: true },
+  { id: 'offdays', label: '休み管理', icon: '📅', requiresSettings: true },
 ];
 
 export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('salon');
+  const { can } = useAuth();
+  const tabs = TABS.filter((tab) => !tab.requiresSettings || can('change_settings'));
+  const [activeTab, setActiveTab] = useState<Tab>(tabs[0].id);
 
   return (
     <>
@@ -30,7 +34,7 @@ export const Settings: React.FC = () => {
           borderRight: '1px solid #e0e0e0',
           overflowY: 'auto'
         }}>
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -62,7 +66,7 @@ export const Settings: React.FC = () => {
           background: '#fff'
         }}>
           {activeTab === 'salon' && <SalonInfo />}
-          {activeTab === 'stylists' && <StylistManagement />}
+          {activeTab === 'staff' && <StaffManagement />}
           {activeTab === 'menus' && <MenuManagement />}
           {activeTab === 'hours' && <WorkingHoursManagement />}
           {activeTab === 'offdays' && <OffDaysManagement />}

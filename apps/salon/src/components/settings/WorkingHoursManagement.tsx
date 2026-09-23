@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../config';
+import { apiFetch } from '../../auth/client';
 
 interface Stylist {
   id: string;
@@ -43,7 +43,7 @@ export const WorkingHoursManagement: React.FC = () => {
   const fetchStylists = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/stylists`);
+      const res = await apiFetch(`/api/stylists`);
       const data = await res.json();
       const active = data.results.filter((s: any) => s.is_active === 1);
       setStylists(active);
@@ -60,7 +60,7 @@ export const WorkingHoursManagement: React.FC = () => {
 
   const fetchWorkingHours = async (stylistId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/working-hours/${stylistId}`);
+      const res = await apiFetch(`/api/working-hours/${stylistId}`);
       const data = await res.json();
       setWorkingHours(data.results || []);
     } catch (err) {
@@ -77,7 +77,7 @@ export const WorkingHoursManagement: React.FC = () => {
       const existing = workingHours.find(w => w.day_of_week === formData.day_of_week);
 
       if (existing) {
-        const res = await fetch(`${API_BASE_URL}/api/working-hours/${existing.id}`, {
+        const res = await apiFetch(`/api/working-hours/${existing.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,7 +87,7 @@ export const WorkingHoursManagement: React.FC = () => {
         });
         if (!res.ok) throw new Error('更新に失敗しました');
       } else {
-        const res = await fetch(`${API_BASE_URL}/api/working-hours`, {
+        const res = await apiFetch(`/api/working-hours`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -109,7 +109,7 @@ export const WorkingHoursManagement: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('この営業時間を削除しますか？')) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/working-hours/${id}`, {
+      const res = await apiFetch(`/api/working-hours/${id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('削除に失敗しました');

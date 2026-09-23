@@ -1,3 +1,4 @@
+import { apiFetch } from '../auth/client';
 import { useState, useEffect, useCallback } from 'react';
 import { Appointment } from '../types';
 
@@ -8,7 +9,7 @@ export const useAppointments = () => {
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/appointments');
+      const response = await apiFetch('/api/appointments');
       if (response.ok) {
         const data = await response.json();
         setAppointments(data.results || []);
@@ -26,7 +27,7 @@ export const useAppointments = () => {
 
   const updateAppointment = useCallback(async (id: string, updates: Partial<Appointment>) => {
     try {
-      const response = await fetch(`/api/appointments/${id}`, {
+      const response = await apiFetch(`/api/appointments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)

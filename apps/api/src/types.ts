@@ -91,4 +91,6 @@ export interface WorkerEnv {
   LINE_CHANNEL_ID?: string;
   LINE_CHANNEL_SECRET?: string;
   LINE_CHANNEL_ACCESS_TOKEN?: string;
+  // スタッフPINのハッシュに混ぜる秘密値（scripts/setup-owner.ts が生成して登録する）
+  PIN_PEPPER?: string;
 }
