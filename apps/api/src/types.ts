@@ -87,4 +87,8 @@ export interface Message {
 
 export interface WorkerEnv {
   DB: D1Database;
+  // Cloudflare Workers Secrets（wrangler.toml には書かない）
+  LINE_CHANNEL_ID?: string;
+  LINE_CHANNEL_SECRET?: string;
+  LINE_CHANNEL_ACCESS_TOKEN?: string;
 }

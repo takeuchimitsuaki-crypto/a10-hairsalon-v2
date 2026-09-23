@@ -1,0 +1,6 @@
+# ローカル開発用（wrangler dev）の秘密情報の雛形。
+# このファイルを .dev.vars という名前でコピーし、値を入れて使う。
+# .dev.vars は Git 管理外。実際の値をこの .example に書かないこと。
+LINE_CHANNEL_ID=
+LINE_CHANNEL_SECRET=
+LINE_CHANNEL_ACCESS_TOKEN=
